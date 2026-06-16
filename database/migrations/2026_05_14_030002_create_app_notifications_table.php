@@ -14,8 +14,12 @@ return new class extends Migration
 
         Schema::create('app_notifications', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('citizen_id')->nullable()->constrained('citizens')->nullOnDelete();
+
+            $table->foreignId('user_id')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
             $table->string('type', 80)->index();
             $table->string('channel', 30)->default('in_app')->index();
             $table->string('title');
@@ -26,7 +30,6 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['user_id', 'read_at']);
-            $table->index(['citizen_id', 'type']);
         });
     }
 

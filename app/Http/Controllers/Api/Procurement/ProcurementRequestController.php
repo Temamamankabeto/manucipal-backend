@@ -74,12 +74,19 @@ class ProcurementRequestController extends Controller
     public function store(StoreProcurementRequest $request): JsonResponse
     {
         $allowedRoles = [
+            User::ROLE_MANAGER,
+            User::ROLE_HEAD_DEVELOPMENT_BRANCH,
+            User::ROLE_HEAD_SERVICE_BRANCH,
             User::ROLE_PROCUREMENT_REQUESTER,
             User::ROLE_RECORDS_OFFICE,
             User::ROLE_SUPER_ADMIN,
         ];
 
-        abort_unless($request->user()->can('procurement.create') && $request->user()->hasAnyRole($allowedRoles), 403);
+        abort_unless(
+            $request->user()->can('procurement.create')
+                && $request->user()->hasAnyRole($allowedRoles),
+            403
+        );
 
         return response()->json(['success'=>true,'message'=>'Procurement request created successfully','data'=>$this->service->create($request->validated(), $request->file('attachments', []))], 201);
     }

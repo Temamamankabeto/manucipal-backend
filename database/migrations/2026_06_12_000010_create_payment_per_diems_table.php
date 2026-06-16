@@ -21,14 +21,14 @@ return new class extends Migration
                 $table->string('destination')->nullable();
                 $table->date('departure_date')->nullable();
                 $table->date('return_date')->nullable();
-                $table->decimal('transport_allowance', 15, 2)->default(0);
-                $table->decimal('daily_per_diem_rate', 15, 2)->default(0);
-                $table->decimal('approved_budget', 15, 2)->default(0);
-                $table->decimal('total_per_diem', 15, 2)->default(0);
-                $table->decimal('total_transport', 15, 2)->default(0);
-                $table->decimal('total_fuel', 15, 2)->default(0);
-                $table->decimal('total_other', 15, 2)->default(0);
-                $table->decimal('grand_total', 15, 2)->default(0);
+                $table->decimal('transport_allowance', 18, 2)->default(0);
+                $table->decimal('daily_per_diem_rate', 18, 2)->default(0);
+                $table->decimal('approved_budget', 18, 2)->default(0);
+                $table->decimal('total_per_diem', 18, 2)->default(0);
+                $table->decimal('total_transport', 18, 2)->default(0);
+                $table->decimal('total_fuel', 18, 2)->default(0);
+                $table->decimal('total_other', 18, 2)->default(0);
+                $table->decimal('grand_total', 18, 2)->default(0);
                 $table->json('metadata')->nullable();
                 $table->timestamps();
 

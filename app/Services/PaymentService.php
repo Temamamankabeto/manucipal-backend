@@ -147,7 +147,9 @@ class PaymentService
             $data['request_type'] = $data['request_type'] ?? 'Payment Request';
             $data['payment_category'] = $data['payment_category'] ?? 'General Payment';
             $data['title'] = $data['title'] ?? ($data['requesting_entity'] ?? 'Payment Request');
-            $data['payment_no'] = $this->nextNumber('PAY');
+            $number = $this->nextNumber('PAY');
+            $data['payment_no'] = $data['payment_no'] ?? $number;
+            $data['request_no'] = $data['request_no'] ?? $data['payment_no'];
             $data['requested_by'] = auth()->id();
             $data['status'] = PaymentRequest::STATUS_DRAFT;
 
@@ -360,9 +362,14 @@ class PaymentService
 
             $request->update($payload);
 
+            if ($action === 'records_process') {
+                $this->deductBudgetForPayment($request->fresh());
+            }
+
             if ($action === 'finance_complete') {
                 $this->deductBudgetForPayment($request->fresh());
             }
+
             $this->history($request, strtoupper($action), $from, $to, $data['note'] ?? $data['reason'] ?? null, $data);
 
             if (class_exists(AuditLogService::class)) {

@@ -23,7 +23,9 @@ class PaymentRequest extends Model
     public const STATUS_REJECTED = 'rejected';
 
     protected $fillable = [
+        'request_no',
         'payment_no',
+        'payee_name',
         'requested_by',
         'requester_type',
         'requesting_entity',
@@ -58,6 +60,10 @@ class PaymentRequest extends Model
         'finance_remark',
         'submitted_at',
         'completed_at',
+        'request_note',
+        'print_status',
+        'printed_at',
+        'printed_by',
     ];
 
     protected $casts = [
@@ -67,6 +73,7 @@ class PaymentRequest extends Model
         'completed_at' => 'datetime',
         'paid_amount' => 'decimal:2',
         'paid_date' => 'date',
+        'printed_at' => 'datetime',
     ];
 
     public function requester(): BelongsTo { return $this->belongsTo(User::class, 'requested_by'); }
