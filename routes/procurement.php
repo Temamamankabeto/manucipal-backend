@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\Procurement\ProcurementCategoryController;
 use App\Http\Controllers\Api\Procurement\ProcurementRequestController;
+use App\Http\Controllers\Api\Procurement\ProcurementTypeController;
 use App\Http\Controllers\Api\Payment\PaymentCategoryController;
 use App\Http\Controllers\Api\Payment\PaymentRequestController;
 use App\Http\Controllers\Api\Payment\PaymentTypeController;
@@ -19,6 +21,9 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::put('/procurement-requests/{id}', [ProcurementRequestController::class, 'update']);
     Route::delete('/procurement-requests/{id}', [ProcurementRequestController::class, 'destroy']);
     Route::post('/procurement-requests/{id}/action', [ProcurementRequestController::class, 'action']);
+
+    Route::apiResource('procurement-categories', ProcurementCategoryController::class);
+    Route::apiResource('procurement-types', ProcurementTypeController::class);
 
     Route::get('/budgets/summary', [BudgetController::class, 'summary']);
     Route::get('/budgets/fiscal-years', [BudgetController::class, 'fiscalYears']);

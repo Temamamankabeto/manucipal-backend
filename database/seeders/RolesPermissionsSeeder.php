@@ -21,7 +21,6 @@ class RolesPermissionsSeeder extends Seeder
             $this->procurementPermissions(),
             $this->paymentPermissions(),
             $this->budgetPermissions(),
-            $this->translationPermissions(),
             $this->sharedDocumentWorkflowPermissions(),
         )));
 
@@ -64,7 +63,6 @@ class RolesPermissionsSeeder extends Seeder
             $this->procurementPermissions(),
             $this->paymentPermissions(),
             $this->budgetPermissions(),
-            $this->translationPermissions(),
             $this->sharedDocumentWorkflowPermissions()
         );
 
@@ -87,6 +85,10 @@ class RolesPermissionsSeeder extends Seeder
             'offices.view',
 
             'procurement.view',
+            'procurement.create',
+            'procurement.update',
+            'procurement.delete',
+            'procurement.submit',
             'procurement.review',
             'procurement.approve',
             'procurement.reject',
@@ -113,8 +115,6 @@ class RolesPermissionsSeeder extends Seeder
             'reports.view',
             'audit.view',
             'notifications.view',
-            'translations.view',
-            'translations.manage',
         ];
 
         $branchHeadPermissions = [
@@ -390,14 +390,6 @@ class RolesPermissionsSeeder extends Seeder
             'budget.update',
             'budget.delete',
             'budget.transaction.view',
-        ];
-    }
-
-    protected function translationPermissions(): array
-    {
-        return [
-            'translations.view',
-            'translations.manage',
         ];
     }
 
