@@ -18,7 +18,7 @@ return [
 
     'allowed_origins' => [
         
-        'https://backend.entrnet.com/api'
+        'https://backend.entrnet.com'
     ],
 
     'allowed_origins_patterns' => [],
