@@ -7,6 +7,7 @@ use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Illuminate\Support\Facades\DB;
 
 class RolesPermissionsSeeder extends Seeder
 {
@@ -51,6 +52,8 @@ class RolesPermissionsSeeder extends Seeder
         }
 
         $this->convertLegacyRoles();
+        $this->grantSuperAdminFullPermissions($guard);
+        $this->removeUnsupportedRoles($guard);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
@@ -68,7 +71,6 @@ class RolesPermissionsSeeder extends Seeder
 
         $managerPermissions = [
             'dashboard.view',
-
             'users.view',
             'users.read',
             'users.create',
@@ -83,7 +85,6 @@ class RolesPermissionsSeeder extends Seeder
             'permissions.read',
             'permissions.assign',
             'offices.view',
-
             'procurement.view',
             'procurement.create',
             'procurement.update',
@@ -91,10 +92,10 @@ class RolesPermissionsSeeder extends Seeder
             'procurement.submit',
             'procurement.review',
             'procurement.approve',
+            'procurement.asset-review',
             'procurement.reject',
             'procurement.forward',
             'procurement.print',
-
             'payment.view',
             'payment.read',
             'payment.create',
@@ -105,13 +106,11 @@ class RolesPermissionsSeeder extends Seeder
             'payment.reject',
             'payment.forward',
             'payment.print',
-
             'budget.view',
             'budget.create',
             'budget.update',
             'budget.delete',
             'budget.transaction.view',
-
             'reports.view',
             'audit.view',
             'notifications.view',
@@ -119,13 +118,13 @@ class RolesPermissionsSeeder extends Seeder
 
         $branchHeadPermissions = [
             'dashboard.view',
-
             'procurement.view',
+            'procurement.create',
+            'procurement.submit',
             'procurement.review',
             'procurement.approve',
             'procurement.reject',
             'procurement.forward',
-
             'payment.view',
             'payment.read',
             'payment.create',
@@ -135,21 +134,22 @@ class RolesPermissionsSeeder extends Seeder
             'payment.approve',
             'payment.reject',
             'payment.forward',
-
             'reports.view',
             'notifications.view',
         ];
 
-        $budgetTeamLeaderPermissions = [
+        $teamLeaderPermissions = [
             'dashboard.view',
-
+            'users.view',
+            'users.read',
+            'offices.view',
             'procurement.view',
             'procurement.review',
             'procurement.approve',
+            'procurement.asset-review',
             'procurement.reject',
             'procurement.forward',
             'procurement.assign-budget-code',
-
             'payment.view',
             'payment.read',
             'payment.create',
@@ -160,129 +160,74 @@ class RolesPermissionsSeeder extends Seeder
             'payment.reject',
             'payment.forward',
             'payment.verify-budget',
-
             'budget.view',
             'budget.update',
             'budget.transaction.view',
-
             'reports.view',
             'notifications.view',
         ];
 
-        $budgetExpertPermissions = [
+        $expertPermissions = [
             'dashboard.view',
-
+            'offices.view',
             'procurement.view',
             'procurement.update',
             'procurement.form.prepare',
             'procurement.forward',
-
             'payment.view',
             'payment.read',
             'payment.update',
             'payment.form.prepare',
             'payment.process',
             'payment.forward',
-
+            'budget.view',
+            'budget.transaction.view',
             'reports.view',
             'notifications.view',
         ];
 
+        $allUserPaymentRequestPermissions = [
+            'payment.view',
+            'payment.read',
+            'payment.create',
+            'payment.update',
+            'payment.submit',
+        ];
+
+        $allUserProcurementRequestPermissions = [
+            'procurement.view',
+            'procurement.read',
+            'procurement.create',
+            'procurement.update',
+            'procurement.submit',
+        ];
+
         return [
             User::ROLE_SUPER_ADMIN => [],
-            User::ROLE_ADMIN => $adminPermissions,
             User::ROLE_MANAGER => $managerPermissions,
             User::ROLE_HEAD_DEVELOPMENT_BRANCH => $branchHeadPermissions,
             User::ROLE_HEAD_SERVICE_BRANCH => $branchHeadPermissions,
-            User::ROLE_PLANNING_BUDGET_TEAM_LEADER => $budgetTeamLeaderPermissions,
-            User::ROLE_PLANNING_BUDGET_EXPERT => $budgetExpertPermissions,
-
-            User::ROLE_ASSET_TEAM_LEADER => [
+            User::ROLE_TEAM_LEADER => array_values(array_unique(array_merge($teamLeaderPermissions, $allUserPaymentRequestPermissions, $allUserProcurementRequestPermissions))),
+            User::ROLE_EXPERT => array_values(array_unique(array_merge($expertPermissions, $allUserPaymentRequestPermissions, $allUserProcurementRequestPermissions))),
+            User::ROLE_SECRETORY => array_values(array_unique(array_merge($allUserPaymentRequestPermissions, $allUserProcurementRequestPermissions, [
                 'dashboard.view',
-                'procurement.view',
-                'procurement.review',
-                'procurement.asset-review',
-                'procurement.reject',
-                'procurement.forward',
-                'reports.view',
-                'notifications.view',
-            ],
-
-            User::ROLE_MACHINERY_TEAM_LEADER => [
-                'dashboard.view',
-                'procurement.view',
-                'procurement.review',
-                'procurement.asset-review',
-                'procurement.reject',
-                'procurement.forward',
-                'reports.view',
-                'notifications.view',
-            ],
-
-            User::ROLE_PROCUREMENT_REQUESTER => [
-                'dashboard.view',
-                'procurement.view',
-                'procurement.create',
-                'procurement.update',
-                'procurement.submit',
-                'notifications.view',
-            ],
-
-            User::ROLE_PAYMENT_REQUESTER => [
-                'dashboard.view',
-                'payment.view',
-                'payment.read',
-                'payment.create',
-                'payment.update',
-                'payment.submit',
-                'notifications.view',
-            ],
-
-            User::ROLE_RECORDS_OFFICE => [
-                'dashboard.view',
-
+                'users.view',
+                'users.read',
+                'offices.view',
                 'procurement.view',
                 'procurement.print',
                 'procurement.forward',
-
                 'payment.view',
                 'payment.read',
-                'payment.create',
-                'payment.update',
-                'payment.submit',
                 'payment.print',
                 'payment.forward',
-
                 'records.register',
                 'records.stamp',
                 'records.print',
                 'records.archive',
-
-                'reports.view',
                 'notifications.view',
-            ],
-
-            User::ROLE_FINANCE => [
-                'dashboard.view',
-
-                'procurement.view',
-
-                'payment.view',
-                'payment.process',
-                'payment.disburse',
-                'payment.complete',
-
-                'finance.process',
-                'finance.disburse',
-
-                'budget.view',
-                'budget.transaction.view',
-
-                'reports.view',
-                'notifications.view',
-            ],
-
-            User::ROLE_FINANCE_ACCOUNTANT => [
+            ]))),
+            User::ROLE_ACCOUNTANT => array_values(array_unique(array_merge($allUserPaymentRequestPermissions, $allUserProcurementRequestPermissions, [
                 'dashboard.view',
                 'payment.view',
                 'payment.read',
@@ -293,7 +238,26 @@ class RolesPermissionsSeeder extends Seeder
                 'budget.view',
                 'budget.transaction.view',
                 'notifications.view',
-            ],
+            ]))),
+
+            User::ROLE_RECORD_OFFICER => array_values(array_unique(array_merge($allUserPaymentRequestPermissions, $allUserProcurementRequestPermissions, [
+                'dashboard.view',
+                'users.view',
+                'users.read',
+                'offices.view',
+                'procurement.view',
+                'procurement.print',
+                'procurement.forward',
+                'payment.view',
+                'payment.read',
+                'payment.print',
+                'payment.forward',
+                'records.register',
+                'records.stamp',
+                'records.print',
+                'records.archive',
+                'notifications.view',
+            ]))),
         ];
     }
 
@@ -326,6 +290,10 @@ class RolesPermissionsSeeder extends Seeder
             'permissions.delete',
 
             'offices.view',
+            'offices.read',
+            'offices.create',
+            'offices.update',
+            'offices.delete',
 
             'audit.view',
             'audit.read',
@@ -356,6 +324,17 @@ class RolesPermissionsSeeder extends Seeder
             'procurement.form.prepare',
             'procurement.print',
             'procurement.complete',
+
+            'procurement-category.view',
+            'procurement-category.read',
+            'procurement-category.create',
+            'procurement-category.update',
+            'procurement-category.delete',
+            'procurement-type.view',
+            'procurement-type.read',
+            'procurement-type.create',
+            'procurement-type.update',
+            'procurement-type.delete',
         ];
     }
 
@@ -378,6 +357,17 @@ class RolesPermissionsSeeder extends Seeder
             'payment.print',
             'payment.disburse',
             'payment.complete',
+
+            'payment-category.view',
+            'payment-category.read',
+            'payment-category.create',
+            'payment-category.update',
+            'payment-category.delete',
+            'payment-type.view',
+            'payment-type.read',
+            'payment-type.create',
+            'payment-type.update',
+            'payment-type.delete',
         ];
     }
 
@@ -425,28 +415,37 @@ class RolesPermissionsSeeder extends Seeder
         $guard = 'sanctum';
 
         $legacy = [
+            'Super Admin' => User::ROLE_SUPER_ADMIN,
             'System Admin' => User::ROLE_SUPER_ADMIN,
-            'General Admin' => User::ROLE_ADMIN,
-            'City DMIN' => User::ROLE_ADMIN,
-            'City Admin' => User::ROLE_ADMIN,
-            'Subcity Admin' => User::ROLE_ADMIN,
-            'Woreda Admin' => User::ROLE_ADMIN,
-            'Zone Admin' => User::ROLE_ADMIN,
-            'Zone admin' => User::ROLE_ADMIN,
-            'Planning & Budget Experts' => User::ROLE_PLANNING_BUDGET_EXPERT,
-            'Finance' => User::ROLE_FINANCE_ACCOUNTANT,
-            'Finance Officer' => User::ROLE_FINANCE_ACCOUNTANT,
-            'Accountant' => User::ROLE_FINANCE_ACCOUNTANT,
+            'Admin' => User::ROLE_SUPER_ADMIN,
+            'General Admin' => User::ROLE_SUPER_ADMIN,
+            'City DMIN' => User::ROLE_SUPER_ADMIN,
+            'City Admin' => User::ROLE_SUPER_ADMIN,
+            'Subcity Admin' => User::ROLE_SUPER_ADMIN,
+            'Woreda Admin' => User::ROLE_SUPER_ADMIN,
+            'Zone Admin' => User::ROLE_SUPER_ADMIN,
+            'Zone admin' => User::ROLE_SUPER_ADMIN,
+            'Planning & Budget Team Leader' => User::ROLE_TEAM_LEADER,
+            'Asset Team Leader' => User::ROLE_TEAM_LEADER,
+            'Machinery Team Leader' => User::ROLE_TEAM_LEADER,
+            'Planning & Budget Experts' => User::ROLE_EXPERT,
+            'Planning & Budget Expert' => User::ROLE_EXPERT,
+            'Payment Requester' => User::ROLE_EXPERT,
+            'Procurement Requester' => User::ROLE_EXPERT,
+            'Records Office' => User::ROLE_RECORD_OFFICER,
+            'Record Office' => User::ROLE_RECORD_OFFICER,
+            'Finance' => User::ROLE_ACCOUNTANT,
+            'Finance Officer' => User::ROLE_ACCOUNTANT,
+            'Finance Accountant' => User::ROLE_ACCOUNTANT,
         ];
 
         foreach ($legacy as $oldRole => $newRole) {
-            $old = Role::where('guard_name', $guard)
-                ->where('name', $oldRole)
-                ->first();
+            if ($oldRole === $newRole) {
+                continue;
+            }
 
-            $new = Role::where('guard_name', $guard)
-                ->where('name', $newRole)
-                ->first();
+            $old = Role::where('guard_name', $guard)->where('name', $oldRole)->first();
+            $new = Role::where('guard_name', $guard)->where('name', $newRole)->first();
 
             if (! $old || ! $new) {
                 continue;
@@ -459,5 +458,56 @@ class RolesPermissionsSeeder extends Seeder
                 }
             });
         }
+    }
+
+    protected function grantSuperAdminFullPermissions(string $guard): void
+    {
+        $permissions = Permission::where('guard_name', $guard)->pluck('name')->all();
+
+        $superAdminRole = Role::firstOrCreate([
+            'name' => User::ROLE_SUPER_ADMIN,
+            'guard_name' => $guard,
+        ]);
+
+        $superAdminRole->syncPermissions($permissions);
+
+        $superAdminNames = [
+            User::ROLE_SUPER_ADMIN,
+            'Super Admin',
+            'super admin',
+            'super-admin',
+            'super_admin',
+            'SUPER ADMIN',
+        ];
+
+        Role::query()
+            ->whereIn('name', $superAdminNames)
+            ->get()
+            ->each(function (Role $role) use ($superAdminRole, $permissions) {
+                $role->syncPermissions($permissions);
+
+                $userIds = DB::table('model_has_roles')
+                    ->where('role_id', $role->id)
+                    ->where('model_type', User::class)
+                    ->pluck('model_id');
+
+                User::whereIn('id', $userIds)->chunkById(100, function ($users) use ($superAdminRole, $permissions) {
+                    foreach ($users as $user) {
+                        if (! $user->hasRole($superAdminRole)) {
+                            $user->assignRole($superAdminRole);
+                        }
+
+                        $user->syncPermissions($permissions);
+                    }
+                });
+            });
+    }
+
+    protected function removeUnsupportedRoles(string $guard): void
+    {
+        Role::query()
+            ->where('guard_name', $guard)
+            ->whereNotIn('name', User::systemRoleNames())
+            ->delete();
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Payment;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Http\Requests\PaymentCategory\StorePaymentCategoryRequest;
 use App\Http\Requests\PaymentCategory\UpdatePaymentCategoryRequest;
 use App\Models\PaymentCategory;
@@ -12,9 +13,32 @@ use Illuminate\Support\Facades\DB;
 
 class PaymentCategoryController extends Controller
 {
+    private function isSuperAdmin(?\App\Models\User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole(User::ROLE_SUPER_ADMIN, 'sanctum')
+            || $user->hasRole(User::ROLE_SUPER_ADMIN)
+            || $user->getRoleNames()->contains(fn ($role) => strtolower((string) $role) === strtolower(User::ROLE_SUPER_ADMIN));
+    }
+
+    private function canViewMasterData(?\App\Models\User $user): bool
+    {
+        return $this->isSuperAdmin($user)
+            || (bool) ($user?->can('payment.view') || $user?->can('payment.read') || $user?->can('payment.create'));
+    }
+
+    private function canDeleteMasterData(?\App\Models\User $user): bool
+    {
+        return $this->isSuperAdmin($user)
+            || (bool) ($user?->can('payment.delete') || $user?->can('payment.approve'));
+    }
+
     public function index(Request $request): JsonResponse
     {
-        abort_unless($request->user()->can('payment.view') || $request->user()->can('payment.read') || $request->user()->can('payment.create'), 403);
+        abort_unless($this->canViewMasterData($request->user()), 403);
 
         $query = PaymentCategory::query()->withCount('types');
 
@@ -51,7 +75,7 @@ class PaymentCategoryController extends Controller
 
     public function show(Request $request, PaymentCategory $payment_category): JsonResponse
     {
-        abort_unless($request->user()->can('payment.view') || $request->user()->can('payment.read') || $request->user()->can('payment.create'), 403);
+        abort_unless($this->canViewMasterData($request->user()), 403);
 
         return response()->json([
             'success' => true,
@@ -75,7 +99,7 @@ class PaymentCategoryController extends Controller
 
     public function destroy(Request $request, PaymentCategory $payment_category): JsonResponse
     {
-        abort_unless($request->user()->can('payment.delete') || $request->user()->can('payment.approve'), 403);
+        abort_unless($this->canDeleteMasterData($request->user()), 403);
 
         DB::transaction(fn () => $payment_category->delete());
 

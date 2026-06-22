@@ -43,7 +43,7 @@ class AuthController extends Controller
         $refreshToken = Str::random(64);
         $user->forceFill(['refresh_token' => hash('sha256', $refreshToken), 'refresh_token_expires_at' => now()->addDays(30)])->save();
 
-        return response()->json($this->authPayload($user->fresh(['office','subCity','woreda','zone']), $accessToken, $refreshToken), 201)->cookie($this->refreshCookie($refreshToken));
+        return response()->json($this->authPayload($user->fresh(['office','department','subCity','woreda','zone']), $accessToken, $refreshToken), 201)->cookie($this->refreshCookie($refreshToken));
     }
 
     public function login(Request $request)
@@ -55,7 +55,7 @@ class AuthController extends Controller
 
         $login = trim((string) $request->input('login'));
 
-        $user = User::with(['office','subCity','woreda','zone'])
+        $user = User::with(['office','department','subCity','woreda','zone'])
             ->where(function ($query) use ($login) {
                 $query->where('email', $login)
                     ->orWhere('phone', $login);
@@ -76,12 +76,12 @@ class AuthController extends Controller
         $refreshToken = Str::random(64);
         $user->forceFill(['refresh_token' => hash('sha256', $refreshToken), 'refresh_token_expires_at' => now()->addDays(30), 'last_login_at' => now()])->save();
 
-        return response()->json($this->authPayload($user->fresh(['office','subCity','woreda','zone']), $accessToken, $refreshToken))->cookie($this->refreshCookie($refreshToken));
+        return response()->json($this->authPayload($user->fresh(['office','department','subCity','woreda','zone']), $accessToken, $refreshToken))->cookie($this->refreshCookie($refreshToken));
     }
 
     public function me(Request $request)
     {
-        $user = $request->user()->load(['office','subCity','woreda','zone']);
+        $user = $request->user()->load(['office','department','subCity','woreda','zone']);
         return response()->json(['success' => true, 'message' => 'Authenticated user retrieved successfully', 'data' => $this->userPayload($user), 'user' => $this->userPayload($user), 'roles' => $user->getRoleNames()->values()->all(), 'permissions' => $user->getAllPermissions()->pluck('name')->values()->all()]);
     }
 
@@ -108,12 +108,14 @@ class AuthController extends Controller
             'address' => $user->address,
             'status' => $user->is_active ? 'active' : 'disabled',
             'office_id' => $user->office_id,
+            'department_id' => $user->department_id,
             'admin_level' => $user->admin_level,
             'sub_city_id' => $user->sub_city_id,
             'subcity_id' => $user->sub_city_id,
             'woreda_id' => $user->woreda_id,
             'zone_id' => $user->zone_id,
             'office' => $this->officePayload($user->office),
+            'department' => $this->departmentPayload($user->department),
             'sub_city' => $this->officePayload($user->subCity),
             'subcity' => $this->officePayload($user->subCity),
             'woreda' => $this->officePayload($user->woreda),
@@ -127,6 +129,11 @@ class AuthController extends Controller
     protected function officePayload($office): ?array
     {
         return $office ? ['id' => $office->id, 'name' => $office->name, 'code' => $office->code, 'type' => $office->type, 'parent_id' => $office->parent_id] : null;
+    }
+
+    protected function departmentPayload($department): ?array
+    {
+        return $department ? ['id' => $department->id, 'name' => $department->name, 'office_id' => $department->office_id] : null;
     }
 
     protected function refreshCookie(string $refreshToken)

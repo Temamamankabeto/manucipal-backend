@@ -12,9 +12,29 @@ use Illuminate\Support\Facades\DB;
 
 class ProcurementCategoryController extends Controller
 {
+    private function canManageMasterData(Request $request, string $module): bool
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->can($module . '.view')
+            || $user->can($module . '.read')
+            || $user->can($module . '.create')
+            || $user->can($module . '.update')
+            || $user->can($module . '.delete')
+            || $user->can($module . '.approve');
+    }
+
     public function index(Request $request): JsonResponse
     {
-        abort_unless($request->user()->can('procurement.view') || $request->user()->can('procurement.read') || $request->user()->can('procurement.create'), 403);
+        abort_unless($this->canManageMasterData($request, 'procurement'), 403);
 
         $query = ProcurementCategory::query()->withCount('types');
 
@@ -51,7 +71,7 @@ class ProcurementCategoryController extends Controller
 
     public function show(Request $request, ProcurementCategory $procurement_category): JsonResponse
     {
-        abort_unless($request->user()->can('procurement.view') || $request->user()->can('procurement.read') || $request->user()->can('procurement.create'), 403);
+        abort_unless($this->canManageMasterData($request, 'procurement'), 403);
 
         return response()->json([
             'success' => true,
@@ -75,7 +95,7 @@ class ProcurementCategoryController extends Controller
 
     public function destroy(Request $request, ProcurementCategory $procurement_category): JsonResponse
     {
-        abort_unless($request->user()->can('procurement.delete') || $request->user()->can('procurement.approve'), 403);
+        abort_unless($this->canManageMasterData($request, 'procurement'), 403);
         abort_if($procurement_category->types()->exists(), 422, 'Category has procurement types and cannot be deleted.');
 
         DB::transaction(fn () => $procurement_category->delete());

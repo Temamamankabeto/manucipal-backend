@@ -73,6 +73,21 @@ class UserController extends Controller
         ]);
     }
 
+    public function departmentsLite(Request $request): JsonResponse
+    {
+        $this->authorize('departmentsLite', User::class);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Departments retrieved successfully',
+            'data' => $this->userService->getDepartmentsLite(
+                $request->user(),
+                $request->query('office_id')
+            ),
+            'meta' => null,
+        ]);
+    }
+
     public function store(StoreUserRequest $request): JsonResponse
     {
         $this->authorize('create', User::class);

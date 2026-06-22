@@ -54,7 +54,7 @@ class StoreUserRequest extends FormRequest
             'nullable',
             'string',
             Rule::in(['III', 'IV']),
-            Rule::requiredIf(fn () => trim((string) $this->input('role')) === User::ROLE_PLANNING_BUDGET_EXPERT),
+            
         ],
 
         'admin_level' => [
@@ -68,9 +68,15 @@ class StoreUserRequest extends FormRequest
         ],
 
         'office_id' => [
-            'nullable',
+            'required',
             'integer',
             Rule::exists('offices', 'id'),
+        ],
+
+        'department_id' => [
+            'nullable',
+            'integer',
+            Rule::exists('departments', 'id')->where(fn ($q) => $q->where('office_id', $this->input('office_id'))),
         ],
 
         'sub_city_id' => [
@@ -97,16 +103,11 @@ class StoreUserRequest extends FormRequest
 
         'titer' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
 
-        /**
-         * ALL roles allowed
-         */
         'role' => [
             'required',
             'string',
             'max:100',
-            Rule::exists('roles', 'name')->where(
-                fn ($q) => $q->where('guard_name', 'sanctum')
-            ),
+            Rule::in(User::userManagementRoleNames()),
         ],
     ];
 }

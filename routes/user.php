@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\Administration\DepartmentController;
+use App\Http\Controllers\Api\Administration\OfficeController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\RoleController;
@@ -12,6 +14,10 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
+    Route::apiResource('offices', OfficeController::class);
+    Route::apiResource('departments', DepartmentController::class);
+    Route::get('offices/{office}/departments', [DepartmentController::class, 'byOffice']);
+
     Route::get('/audit-logs', [AuditLogController::class, 'index']);
     Route::get('/audit-logs/{id}', [AuditLogController::class, 'show']);
 
@@ -24,6 +30,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
 
     Route::get('/users/roles-lite', [UserController::class, 'rolesLite']);
     Route::get('/users/offices-lite', [UserController::class, 'officesLite']);
+    Route::get('/users/departments-lite', [UserController::class, 'departmentsLite']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/users/{id}', [UserController::class, 'show']);
     Route::post('/users', [UserController::class, 'store']);

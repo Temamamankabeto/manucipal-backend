@@ -15,7 +15,7 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, HasRoles, Notifiable;
 
-    public const ROLE_SUPER_ADMIN = 'Super Admin';
+    public const ROLE_SUPER_ADMIN = 'Super admin';
     public const ROLE_ADMIN = 'Admin';
 
     /**
@@ -24,6 +24,11 @@ class User extends Authenticatable
     public const ROLE_MANAGER = 'Manager';
     public const ROLE_HEAD_DEVELOPMENT_BRANCH = 'Head of Development Branch';
     public const ROLE_HEAD_SERVICE_BRANCH = 'Head of Service Branch';
+    public const ROLE_TEAM_LEADER = 'Team Leader';
+    public const ROLE_EXPERT = 'Expert';
+    public const ROLE_SECRETORY = 'Secretory';
+    public const ROLE_ACCOUNTANT = 'Accountant';
+    public const ROLE_RECORD_OFFICER = 'Record Officer';
     public const ROLE_PLANNING_BUDGET_TEAM_LEADER = 'Planning & Budget Team Leader';
     public const ROLE_PLANNING_BUDGET_EXPERT = 'Planning & Budget Expert';
     public const ROLE_PROCUREMENT_REQUESTER = 'Procurement Requester';
@@ -40,20 +45,30 @@ class User extends Authenticatable
     {
         return [
             self::ROLE_SUPER_ADMIN,
-            self::ROLE_ADMIN,
             self::ROLE_MANAGER,
             self::ROLE_HEAD_DEVELOPMENT_BRANCH,
             self::ROLE_HEAD_SERVICE_BRANCH,
-            self::ROLE_PLANNING_BUDGET_TEAM_LEADER,
-            self::ROLE_PLANNING_BUDGET_EXPERT,
-            self::ROLE_PROCUREMENT_REQUESTER,
-            self::ROLE_PAYMENT_REQUESTER,
-            self::ROLE_RECORDS_OFFICE,
-            self::ROLE_FINANCE,
-            self::ROLE_FINANCE_ACCOUNTANT,
-            self::ROLE_ASSET_TEAM_LEADER,
-            self::ROLE_MACHINERY_TEAM_LEADER,
+            self::ROLE_TEAM_LEADER,
+            self::ROLE_EXPERT,
+            self::ROLE_SECRETORY,
+            self::ROLE_ACCOUNTANT,
+            self::ROLE_RECORD_OFFICER,
         ];
+    }
+
+    public static function userManagementRoleNames(): array
+    {
+        return array_values(array_unique([
+            self::ROLE_SUPER_ADMIN,
+            self::ROLE_MANAGER,
+            self::ROLE_HEAD_DEVELOPMENT_BRANCH,
+            self::ROLE_HEAD_SERVICE_BRANCH,
+            self::ROLE_TEAM_LEADER,
+            self::ROLE_EXPERT,
+            self::ROLE_SECRETORY,
+            self::ROLE_ACCOUNTANT,
+            self::ROLE_RECORD_OFFICER,
+        ]));
     }
 
     public const LEVEL_CITY = 'city';
@@ -76,6 +91,7 @@ class User extends Authenticatable
         'is_active',
         'address',
         'office_id',
+        'department_id',
         'admin_level',
         'professional_level',
         'sub_city_id',
@@ -105,6 +121,11 @@ class User extends Authenticatable
     public function office(): BelongsTo
     {
         return $this->belongsTo(Office::class, 'office_id');
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'department_id');
     }
 
     public function getSignatureUrlAttribute(): ?string
@@ -164,7 +185,13 @@ class User extends Authenticatable
 
     public function isSuperAdmin(): bool
     {
-        return $this->hasRole(self::ROLE_SUPER_ADMIN);
+        return $this->hasAnyRole([
+            self::ROLE_SUPER_ADMIN,
+            'Super Admin',
+            'super admin',
+            'super-admin',
+            'super_admin',
+        ]);
     }
 
     public function isAdmin(): bool

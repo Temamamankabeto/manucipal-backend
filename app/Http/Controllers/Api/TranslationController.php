@@ -11,6 +11,34 @@ use Illuminate\Validation\Rule;
 
 class TranslationController extends Controller
 {
+    public function resources(): JsonResponse
+    {
+        $resources = [
+            'en' => [],
+            'om' => [],
+            'am' => [],
+        ];
+
+        Translation::query()
+            ->select(['language', 'translation_key', 'translation_value'])
+            ->orderBy('translation_key')
+            ->get()
+            ->each(function (Translation $translation) use (&$resources) {
+                if (! array_key_exists($translation->language, $resources)) {
+                    return;
+                }
+
+                $resources[$translation->language][$translation->translation_key] = $translation->translation_value;
+            });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Translation resources retrieved successfully',
+            'data' => $resources,
+            'meta' => null,
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = Translation::query()

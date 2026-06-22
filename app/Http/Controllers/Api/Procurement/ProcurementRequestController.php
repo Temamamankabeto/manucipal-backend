@@ -11,6 +11,7 @@ use App\Models\ProcurementRequest;
 use App\Models\User;
 use App\Services\ProcurementService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ProcurementRequestController extends Controller
 {
@@ -71,22 +72,57 @@ class ProcurementRequestController extends Controller
         return response()->json(['success'=>true,'message'=>'Initial procurement approvers retrieved successfully','data'=>$users,'meta'=>['total'=>$users->count(),'allowed_roles'=>array_keys($roleAliasMap)]]);
     }
 
+
+
+    public function departments(Request $request): JsonResponse
+    {
+        abort_unless($request->user()->can('procurement.view') || $request->user()->can('procurement.read') || $request->user()->can('procurement.approve'), 403);
+
+        $procurement = $request->integer('procurement_request_id')
+            ? $this->service->find($request->integer('procurement_request_id'))
+            : null;
+
+        $departments = $this->service->departments($procurement);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Procurement departments retrieved successfully',
+            'data' => $departments,
+            'meta' => ['total' => $departments->count()],
+        ]);
+    }
+
+    public function budgetDepartments(Request $request): JsonResponse
+    {
+        abort_unless($request->user()->can('procurement.view') || $request->user()->can('procurement.read') || $request->user()->can('procurement.approve'), 403);
+
+        $departments = $this->service->budgetDepartments();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Budget departments retrieved successfully',
+            'data' => $departments,
+            'meta' => ['total' => $departments->count()],
+        ]);
+    }
+
+    public function departmentTeamLeaders(Request $request, int|string $department): JsonResponse
+    {
+        abort_unless($request->user()->can('procurement.view') || $request->user()->can('procurement.read') || $request->user()->can('procurement.approve'), 403);
+
+        $users = $this->service->departmentTeamLeaders($department);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Department Team Leaders retrieved successfully',
+            'data' => $users,
+            'meta' => ['total' => $users->count()],
+        ]);
+    }
+
     public function store(StoreProcurementRequest $request): JsonResponse
     {
-        $allowedRoles = [
-            User::ROLE_MANAGER,
-            User::ROLE_HEAD_DEVELOPMENT_BRANCH,
-            User::ROLE_HEAD_SERVICE_BRANCH,
-            User::ROLE_PROCUREMENT_REQUESTER,
-            User::ROLE_RECORDS_OFFICE,
-            User::ROLE_SUPER_ADMIN,
-        ];
-
-        abort_unless(
-            $request->user()->can('procurement.create')
-                && $request->user()->hasAnyRole($allowedRoles),
-            403
-        );
+        abort_unless($request->user()->can('procurement.create'), 403);
 
         return response()->json(['success'=>true,'message'=>'Procurement request created successfully','data'=>$this->service->create($request->validated(), $request->file('attachments', []))], 201);
     }
@@ -119,6 +155,8 @@ class ProcurementRequestController extends Controller
             'reject' => 'procurement.reject',
             'asset_team_approve' => 'procurement.asset-review',
             'assign_budget_code' => 'procurement.assign-budget-code',
+            'save_manager_final_attachment_draft' => 'procurement.approve',
+            'save_record_attachment_draft' => 'records.register',
             'records_process' => 'records.register',
             'finance_complete' => 'finance.process',
             default => 'procurement.approve',

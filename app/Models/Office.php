@@ -43,6 +43,11 @@ class Office extends Model
         return $this->hasMany(User::class);
     }
 
+    public function departments(): HasMany
+    {
+        return $this->hasMany(Department::class);
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

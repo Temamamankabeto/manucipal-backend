@@ -8,6 +8,10 @@ trait ChecksPermissions
 {
     protected function allows(User $user, string ...$permissions): bool
     {
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
         foreach ($permissions as $permission) {
             if ($user->can($permission)) {
                 return true;

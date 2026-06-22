@@ -46,6 +46,9 @@ class PaymentRequest extends Model
         'official_date',
         'status',
         'current_handler_id',
+        'department_id',
+        'assigned_team_leader_id',
+        'assigned_expert_id',
         'manager_signed_by',
         'budget_tl_signed_by',
         'budget_expert_signed_by',
@@ -58,6 +61,17 @@ class PaymentRequest extends Model
         'paid_date',
         'voucher_no',
         'finance_remark',
+        'attachment_to',
+        'attachment_address',
+        'attachment_case',
+        'attachment_body',
+        'attachment_gg',
+        'attachment_drafted_by',
+        'attachment_drafted_at',
+        'attachment_reference_no',
+        'attachment_official_date',
+        'records_attachment_drafted_by',
+        'records_attachment_drafted_at',
         'submitted_at',
         'completed_at',
         'request_note',
@@ -73,11 +87,18 @@ class PaymentRequest extends Model
         'completed_at' => 'datetime',
         'paid_amount' => 'decimal:2',
         'paid_date' => 'date',
+        'attachment_gg' => 'array',
+        'attachment_drafted_at' => 'datetime',
+        'attachment_official_date' => 'date',
+        'records_attachment_drafted_at' => 'datetime',
         'printed_at' => 'datetime',
     ];
 
     public function requester(): BelongsTo { return $this->belongsTo(User::class, 'requested_by'); }
     public function currentHandler(): BelongsTo { return $this->belongsTo(User::class, 'current_handler_id'); }
+    public function department(): BelongsTo { return $this->belongsTo(Department::class); }
+    public function assignedTeamLeader(): BelongsTo { return $this->belongsTo(User::class, 'assigned_team_leader_id'); }
+    public function assignedExpert(): BelongsTo { return $this->belongsTo(User::class, 'assigned_expert_id'); }
     public function paymentCategory(): BelongsTo { return $this->belongsTo(PaymentCategory::class, 'payment_category_id'); }
     public function paymentType(): BelongsTo { return $this->belongsTo(PaymentType::class, 'payment_type_id'); }
     public function budget(): BelongsTo { return $this->belongsTo(Budget::class); }
@@ -93,5 +114,7 @@ class PaymentRequest extends Model
     public function managerFinalSigner(): BelongsTo { return $this->belongsTo(User::class, 'manager_final_signed_by'); }
     public function recordsSigner(): BelongsTo { return $this->belongsTo(User::class, 'records_signed_by'); }
     public function financeSigner(): BelongsTo { return $this->belongsTo(User::class, 'finance_signed_by'); }
+    public function attachmentDrafter(): BelongsTo { return $this->belongsTo(User::class, 'attachment_drafted_by'); }
+    public function recordsAttachmentDrafter(): BelongsTo { return $this->belongsTo(User::class, 'records_attachment_drafted_by'); }
     public function paidBy(): BelongsTo { return $this->belongsTo(User::class, 'paid_by'); }
 }

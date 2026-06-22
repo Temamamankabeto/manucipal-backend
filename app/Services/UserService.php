@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Department;
 use App\Models\Office;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -23,7 +24,7 @@ class UserService
         $adminLevel = $filters['admin_level'] ?? null;
 
         $query = User::query()
-            ->with(['roles:id,name,guard_name', 'office:id,name,type,code,parent_id', 'subCity:id,name,type,code,parent_id', 'woreda:id,name,type,code,parent_id', 'zone:id,name,type,code,parent_id']);
+            ->with(['roles:id,name,guard_name', 'office:id,name,type,code,parent_id', 'department:id,office_id,name', 'subCity:id,name,type,code,parent_id', 'woreda:id,name,type,code,parent_id', 'zone:id,name,type,code,parent_id']);
 
         if ($actor) {
             $query->visibleTo($actor);
@@ -51,7 +52,7 @@ class UserService
             $query->where('admin_level', $adminLevel);
         }
 
-        foreach (['office_id', 'sub_city_id', 'woreda_id', 'zone_id'] as $column) {
+        foreach (['office_id', 'department_id', 'sub_city_id', 'woreda_id', 'zone_id'] as $column) {
             if (! empty($filters[$column])) {
                 $query->where($column, $filters[$column]);
             }
@@ -77,7 +78,7 @@ class UserService
 
     public function transformUser(User $user): array
     {
-        $user->loadMissing(['roles:id,name,guard_name', 'office:id,name,type,code,parent_id', 'subCity:id,name,type,code,parent_id', 'woreda:id,name,type,code,parent_id', 'zone:id,name,type,code,parent_id']);
+        $user->loadMissing(['roles:id,name,guard_name', 'office:id,name,type,code,parent_id', 'department:id,office_id,name', 'subCity:id,name,type,code,parent_id', 'woreda:id,name,type,code,parent_id', 'zone:id,name,type,code,parent_id']);
 
         return [
             'id' => $user->id,
@@ -92,10 +93,12 @@ class UserService
             'admin_level' => $user->admin_level,
             'professional_level' => $user->professional_level,
             'office_id' => $user->office_id,
+            'department_id' => $user->department_id,
             'sub_city_id' => $user->sub_city_id,
             'woreda_id' => $user->woreda_id,
             'zone_id' => $user->zone_id,
             'office' => $this->officePayload($user->office),
+            'department' => $user->department ? ['id' => $user->department->id, 'office_id' => $user->department->office_id, 'name' => $user->department->name] : null,
             'sub_city' => $this->officePayload($user->subCity),
             'woreda' => $this->officePayload($user->woreda),
             'zone' => $this->officePayload($user->zone),
@@ -112,7 +115,7 @@ class UserService
     public function getUser(int|string $id, ?User $actor = null): User
     {
         $query = User::query()
-            ->with(['roles:id,name,guard_name', 'office:id,name,type,code,parent_id', 'subCity:id,name,type,code,parent_id', 'woreda:id,name,type,code,parent_id', 'zone:id,name,type,code,parent_id']);
+            ->with(['roles:id,name,guard_name', 'office:id,name,type,code,parent_id', 'department:id,office_id,name', 'subCity:id,name,type,code,parent_id', 'woreda:id,name,type,code,parent_id', 'zone:id,name,type,code,parent_id']);
 
         if ($actor) {
             $query->visibleTo($actor);
@@ -121,24 +124,34 @@ class UserService
         return $query->findOrFail($id);
     }
 
-   public function getRolesLite(?User $actor = null)
-{
-    $query = Role::query()
-        ->where('guard_name', 'sanctum')
-        ->select('id', 'name')
-        ->orderBy('name');
+    public function getRolesLite(?User $actor = null)
+    {
+        $allowedRoles = User::userManagementRoleNames();
 
-    /**
-     * Optional permission restriction:
-     * If non-super admin should not create Super Admin,
-     * exclude only Super Admin.
-     */
-    if ($actor && ! $actor->isSuperAdmin()) {
-        $query->where('name', '!=', User::ROLE_SUPER_ADMIN);
+        if ($actor && ! $actor->isSuperAdmin()) {
+            $allowedRoles = array_values(array_filter(
+                $allowedRoles,
+                fn (string $role) => $role !== User::ROLE_SUPER_ADMIN
+            ));
+        }
+
+        return Role::query()
+            ->where('guard_name', 'sanctum')
+            ->whereIn('name', $allowedRoles)
+            ->select('id', 'name')
+            ->orderByRaw("CASE name
+                WHEN ? THEN 1
+                WHEN ? THEN 2
+                WHEN ? THEN 3
+                WHEN ? THEN 4
+                WHEN ? THEN 5
+                WHEN ? THEN 6
+                WHEN ? THEN 7
+                WHEN ? THEN 8
+                WHEN ? THEN 9
+                ELSE 99 END", User::userManagementRoleNames())
+            ->get();
     }
-
-    return $query->get();
-}
 
     public function getOfficesLite(?User $actor = null, ?string $type = null, int|string|null $parentId = null)
     {
@@ -179,6 +192,24 @@ class UserService
         return $query->get();
     }
 
+    public function getDepartmentsLite(?User $actor = null, int|string|null $officeId = null)
+    {
+        $query = Department::query()
+            ->select('id', 'office_id', 'name')
+            ->where('is_active', true)
+            ->orderBy('name');
+
+        if ($officeId) {
+            $query->where('office_id', (int) $officeId);
+        }
+
+        if ($actor && ! $actor->isSuperAdmin() && $actor->office_id) {
+            $query->where('office_id', (int) $actor->office_id);
+        }
+
+        return $query->get();
+    }
+
     public function createUser(array $data, User $actor, ?UploadedFile $signatureFile = null, ?UploadedFile $stampFile = null, ?UploadedFile $titerFile = null): User
     {
         $role = $this->findRole($data['role']);
@@ -199,6 +230,7 @@ class UserService
             'admin_level' => $adminLevel,
             'professional_level' => $this->normalizeProfessionalLevel($role->name, $data['professional_level'] ?? null),
             ...$scope,
+            'department_id' => $this->normalizeDepartment($data['department_id'] ?? null, $scope['office_id'] ?? null),
         ]);
 
         $this->storeSignatureAndStamp($user, $signatureFile, $stampFile, $titerFile);
@@ -209,7 +241,7 @@ class UserService
             'after' => ['role' => $role->name, 'admin_level' => $adminLevel, 'professional_level' => $user->professional_level, ...$scope],
         ]);
 
-        return $user->load(['roles', 'office', 'subCity', 'woreda', 'zone']);
+        return $user->load(['roles', 'office', 'department', 'subCity', 'woreda', 'zone']);
     }
 
     public function updateUser(User $user, array $data, User $actor, ?UploadedFile $signatureFile = null, ?UploadedFile $stampFile = null, ?UploadedFile $titerFile = null): User
@@ -230,6 +262,7 @@ class UserService
             'admin_level' => $user->admin_level,
             'professional_level' => $user->professional_level,
             'office_id' => $user->office_id,
+            'department_id' => $user->department_id,
             'sub_city_id' => $user->sub_city_id,
             'woreda_id' => $user->woreda_id,
             'zone_id' => $user->zone_id,
@@ -243,6 +276,7 @@ class UserService
             'admin_level' => $adminLevel,
             'professional_level' => $this->normalizeProfessionalLevel($role->name, $data['professional_level'] ?? null),
             ...$scope,
+            'department_id' => $this->normalizeDepartment($data['department_id'] ?? null, $scope['office_id'] ?? null),
         ]);
 
         $this->storeSignatureAndStamp($user, $signatureFile, $stampFile, $titerFile);
@@ -254,7 +288,7 @@ class UserService
             'after' => ['role' => $role->name, 'admin_level' => $adminLevel, 'professional_level' => $user->professional_level, ...$scope],
         ]);
 
-        return $user->load(['roles', 'office', 'subCity', 'woreda', 'zone']);
+        return $user->load(['roles', 'office', 'department', 'subCity', 'woreda', 'zone']);
     }
 
     public function assignRole(User $user, string $roleName, User $actor): User
@@ -274,7 +308,7 @@ class UserService
             'after' => ['role' => $role->name, 'admin_level' => $adminLevel],
         ]);
 
-        return $user->load(['roles', 'office', 'subCity', 'woreda', 'zone']);
+        return $user->load(['roles', 'office', 'department', 'subCity', 'woreda', 'zone']);
     }
 
     public function toggleUser(User $user): User
@@ -287,7 +321,7 @@ class UserService
             'after' => ['is_active' => $user->is_active],
         ]);
 
-        return $user->load(['roles', 'office', 'subCity', 'woreda', 'zone']);
+        return $user->load(['roles', 'office', 'department', 'subCity', 'woreda', 'zone']);
     }
 
     public function resetPassword(User $user, string $newPassword): User
@@ -328,7 +362,7 @@ class UserService
 
         $user->save();
 
-        return $user->load(['roles', 'office', 'subCity', 'woreda', 'zone']);
+        return $user->load(['roles', 'office', 'department', 'subCity', 'woreda', 'zone']);
     }
 
 
@@ -423,20 +457,31 @@ class UserService
  $current = $current->parent;
  }
 
- // office_id is only the exact assigned office for city/subcity/woreda.
- // For zone admin, we keep office_id null and use zone_id.
- $scope['office_id'] = match ($office->type) {
- Office::TYPE_CITY,
- Office::TYPE_SUBCITY,
- Office::TYPE_WOREDA => $office->id,
- Office::TYPE_ZONE => null,
- default => null,
- };
+ // Keep the selected office on every user. Legacy municipality scope fields
+ // are still populated for existing workflow compatibility.
+ $scope['office_id'] = $office->id;
  }
 
  return $scope;
  }
 
+
+    protected function normalizeDepartment(int|string|null $departmentId, int|string|null $officeId): ?int
+    {
+        if (! $departmentId) {
+            return null;
+        }
+
+        $department = Department::query()->findOrFail($departmentId);
+
+        if ($officeId && (int) $department->office_id !== (int) $officeId) {
+            throw ValidationException::withMessages([
+                'department_id' => ['Selected department does not belong to the selected office.'],
+            ]);
+        }
+
+        return (int) $department->id;
+    }
 
     protected function isPaymentProcurementRole(string $roleName): bool
     {
@@ -456,6 +501,15 @@ class UserService
         ], true);
     }
 
+    protected function isBusinessAssignableRole(string $roleName): bool
+    {
+        if ($roleName === User::ROLE_SUPER_ADMIN) {
+            return false;
+        }
+
+        return in_array($roleName, User::userManagementRoleNames(), true);
+    }
+
     protected function normalizeProfessionalLevel(string $roleName, ?string $professionalLevel): ?string
     {
         if ($roleName !== User::ROLE_PLANNING_BUDGET_EXPERT) {
@@ -473,7 +527,7 @@ class UserService
 
     protected function normalizeAdminLevel(string $roleName, ?string $adminLevel, array $scope): ?string
     {
-        if ($roleName === User::ROLE_SUPER_ADMIN || $this->isPaymentProcurementRole($roleName)) {
+        if ($roleName === User::ROLE_SUPER_ADMIN || in_array($roleName, User::userManagementRoleNames(), true) || $this->isPaymentProcurementRole($roleName)) {
             return null;
         }
 
@@ -536,7 +590,7 @@ class UserService
         }
 
         if (! $actor->isAdmin()) {
-            if ($actor->isBusinessManager() && $this->isPaymentProcurementRole($roleName)) {
+            if ($actor->isBusinessManager() && $this->isBusinessAssignableRole($roleName)) {
                 return;
             }
 

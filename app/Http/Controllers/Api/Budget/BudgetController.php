@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Budget;
 use App\Http\Controllers\Controller;
 use App\Models\Budget;
 use App\Models\PaymentType;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -55,7 +56,7 @@ class BudgetController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        abort_unless($request->user()->can('budget.create'), 403);
+        $this->authorizeBudgetManagement($request);
 
         $data = $request->validate([
             'bi_code' => ['nullable', 'string', 'max:100'],
@@ -107,7 +108,7 @@ class BudgetController extends Controller
 
     public function update(Request $request, int|string $id): JsonResponse
     {
-        abort_unless($request->user()->can('budget.update'), 403);
+        $this->authorizeBudgetManagement($request);
 
         $budget = Budget::findOrFail($id);
 
@@ -144,7 +145,7 @@ class BudgetController extends Controller
 
     public function destroy(Request $request, int|string $id): JsonResponse
     {
-        abort_unless($request->user()->can('budget.delete'), 403);
+        $this->authorizeBudgetManagement($request);
 
         $budget = Budget::withCount('transactions')->findOrFail($id);
         abort_if($budget->transactions_count > 0 || (float) $budget->used_amount > 0, 422, 'Budget has transactions and cannot be deleted. Deactivate it instead.');
@@ -158,6 +159,31 @@ class BudgetController extends Controller
         ]);
     }
 
+
+    protected function authorizeBudgetManagement(Request $request): void
+    {
+        $user = $request->user()?->loadMissing('department');
+
+        abort_unless($user instanceof User && $this->canManageBudgetMasterData($user), 403);
+    }
+
+    protected function canManageBudgetMasterData(User $user): bool
+    {
+        if ($user->hasRole(User::ROLE_SUPER_ADMIN)) {
+            return true;
+        }
+
+        $departmentName = strtolower((string) ($user->department?->name ?? ''));
+        $isBudgetDepartment = str_contains($departmentName, 'budget')
+            || str_contains($departmentName, 'baajata')
+            || str_contains($departmentName, 'baajataa');
+
+        return $user->can('budget.create')
+            && $user->can('budget.update')
+            && $user->can('budget.delete')
+            && $user->hasRole(User::ROLE_TEAM_LEADER)
+            && $isBudgetDepartment;
+    }
 
     public function fiscalYears(Request $request): JsonResponse
     {

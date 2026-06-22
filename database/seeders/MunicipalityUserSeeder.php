@@ -20,73 +20,55 @@ class MunicipalityUserSeeder extends Seeder
                 'name' => 'Super Admin',
                 'email' => 'superadmin@adama.gov.et',
                 'phone' => '+251900000001',
-                'role' => 'Super Admin',
+                'role' => User::ROLE_SUPER_ADMIN,
             ],
             [
                 'name' => 'Manager',
                 'email' => 'manager@adama.gov.et',
                 'phone' => '+251900000002',
-                'role' => 'Manager',
+                'role' => User::ROLE_MANAGER,
             ],
             [
                 'name' => 'Head of Development Branch',
                 'email' => 'development@adama.gov.et',
                 'phone' => '+251900000003',
-                'role' => 'Head of Development Branch',
+                'role' => User::ROLE_HEAD_DEVELOPMENT_BRANCH,
             ],
             [
                 'name' => 'Head of Service Branch',
                 'email' => 'service@adama.gov.et',
                 'phone' => '+251900000004',
-                'role' => 'Head of Service Branch',
+                'role' => User::ROLE_HEAD_SERVICE_BRANCH,
             ],
             [
-                'name' => 'Planning & Budget Team Leader',
-                'email' => 'budgetleader@adama.gov.et',
+                'name' => 'Team Leader',
+                'email' => 'teamleader@adama.gov.et',
                 'phone' => '+251900000005',
-                'role' => 'Planning & Budget Team Leader',
+                'role' => User::ROLE_TEAM_LEADER,
             ],
             [
-                'name' => 'Planning & Budget Expert',
-                'email' => 'budgetexpert@adama.gov.et',
+                'name' => 'Expert',
+                'email' => 'expert@adama.gov.et',
                 'phone' => '+251900000006',
-                'role' => 'Planning & Budget Expert',
+                'role' => User::ROLE_EXPERT,
             ],
             [
-                'name' => 'Payment Requester',
-                'email' => 'paymentrequester@adama.gov.et',
+                'name' => 'Secretory',
+                'email' => 'secretory@adama.gov.et',
                 'phone' => '+251900000007',
-                'role' => 'Payment Requester',
+                'role' => User::ROLE_SECRETORY,
             ],
             [
-                'name' => 'Procurement Requester',
-                'email' => 'procurementrequester@adama.gov.et',
+                'name' => 'Accountant',
+                'email' => 'accountant@adama.gov.et',
                 'phone' => '+251900000008',
-                'role' => 'Procurement Requester',
+                'role' => User::ROLE_ACCOUNTANT,
             ],
             [
-                'name' => 'Asset Team Leader',
-                'email' => 'asset@adama.gov.et',
+                'name' => 'Record Officer',
+                'email' => 'record@adama.gov.et',
                 'phone' => '+251900000009',
-                'role' => 'Asset Team Leader',
-            ],
-            [
-                'name' => 'Machinery Team Leader',
-                'email' => 'machinery@adama.gov.et',
-                'phone' => '+251900000010',
-                'role' => 'Machinery Team Leader',
-            ],
-            [
-                'name' => 'Records Office',
-                'email' => 'records@adama.gov.et',
-                'phone' => '+251900000011',
-                'role' => 'Records Office',
-            ],
-            [
-                'name' => 'Finance Accountant',
-                'email' => 'finance@adama.gov.et',
-                'phone' => '+251900000012',
-                'role' => 'Finance Accountant',
+                'role' => User::ROLE_RECORD_OFFICER,
             ],
         ];
 
@@ -108,20 +90,28 @@ class MunicipalityUserSeeder extends Seeder
         string $role,
         ?Office $office
     ): void {
-        $user = User::updateOrCreate(
-            ['email' => $email],
-            [
-                'name' => $name,
-                'phone' => $phone,
-                'password' => Hash::make('Admin@12345'),
-                'is_active' => true,
-                'admin_level' => null,
-                'office_id' => $office?->id,
-                'sub_city_id' => null,
-                'woreda_id' => null,
-                'zone_id' => null,
-            ]
-        );
+        $user = User::query()
+            ->where('email', $email)
+            ->orWhere('phone', $phone)
+            ->first();
+
+        if (! $user) {
+            $user = new User();
+            $user->password = Hash::make('Admin@12345');
+        }
+
+        $user->forceFill([
+            'name' => $name,
+            'email' => $email,
+            'phone' => $phone,
+            'is_active' => true,
+            'admin_level' => null,
+            'office_id' => $office?->id,
+            'department_id' => null,
+            'sub_city_id' => null,
+            'woreda_id' => null,
+            'zone_id' => null,
+        ])->save();
 
         $user->syncRoles([$role]);
     }

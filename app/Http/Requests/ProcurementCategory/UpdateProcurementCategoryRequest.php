@@ -9,7 +9,17 @@ class UpdateProcurementCategoryRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('procurement.update') || $this->user()?->can('procurement.approve');
+        $user = $this->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user?->can('procurement.update') || $user?->can('procurement.approve');
     }
 
     public function rules(): array

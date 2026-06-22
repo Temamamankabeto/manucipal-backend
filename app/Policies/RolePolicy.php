@@ -9,31 +9,31 @@ class RolePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->can('roles.view') || $user->can('roles.read');
+        return $user->isSuperAdmin() || $user->can('roles.view') || $user->can('roles.read');
     }
 
     public function view(User $user, Role $role): bool
     {
-        return $user->can('roles.view') || $user->can('roles.read');
+        return $user->isSuperAdmin() || $user->can('roles.view') || $user->can('roles.read');
     }
 
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin() && $user->can('roles.create');
+        return $user->isSuperAdmin() || $user->can('roles.create');
     }
 
     public function update(User $user, Role $role): bool
     {
-        return $user->isSuperAdmin() && $user->can('roles.update');
+        return $user->isSuperAdmin() || $user->can('roles.update');
     }
 
     public function assignPermissions(User $user, Role $role): bool
     {
-        return $user->can('roles.assign-permissions') || $user->can('permissions.assign');
+        return $user->isSuperAdmin() || $user->can('roles.assign-permissions') || $user->can('permissions.assign');
     }
 
     public function delete(User $user, Role $role): bool
     {
-        return $user->isSuperAdmin() && $user->can('roles.delete');
+        return $user->isSuperAdmin() || $user->can('roles.delete');
     }
 }

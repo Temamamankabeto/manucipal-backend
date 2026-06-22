@@ -6,6 +6,7 @@ use App\Models\PaymentAttachment;
 use App\Models\PaymentHistory;
 use App\Models\PaymentRequest;
 use App\Models\Budget;
+use App\Models\Department;
 use App\Models\BudgetTransaction;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -22,7 +23,7 @@ class PaymentService
         $perPage = max(1, min((int) ($filters['per_page'] ?? 10), 100));
 
         return PaymentRequest::query()
-            ->with(['requester:id,name,email', 'currentHandler:id,name,email', 'paymentType:id,category_id,name', 'budget:id,bi_code,budget_code,account_name,allocated_amount,used_amount,remaining_amount,status'])
+            ->with(['requester:id,name,email', 'currentHandler:id,name,email', 'department:id,name,office_id', 'assignedTeamLeader:id,name,email,department_id', 'assignedExpert:id,name,email,department_id', 'paymentType:id,category_id,name', 'budget:id,bi_code,budget_code,account_name,allocated_amount,used_amount,remaining_amount,status'])
             ->when(! $this->canViewAllPayments(), function ($q) {
                 $userId = auth()->id();
                 $workflowStatuses = $this->visibleWorkflowStatusesForUser();
@@ -35,6 +36,8 @@ class PaymentService
                         ->orWhere('budget_expert_signed_by', $userId)
                         ->orWhere('budget_tl_final_signed_by', $userId)
                         ->orWhere('manager_final_signed_by', $userId)
+                        ->orWhere('assigned_team_leader_id', $userId)
+                        ->orWhere('assigned_expert_id', $userId)
                         ->orWhere('records_signed_by', $userId)
                         ->orWhere('finance_signed_by', $userId);
 
@@ -64,6 +67,10 @@ class PaymentService
             'histories.actor.roles:id,name',
             'requester:id,name,email',
             'currentHandler:id,name,email,signature_path,stamp_path,titer_path',
+            'department:id,name,office_id',
+            'department.office:id,name',
+            'assignedTeamLeader:id,name,email,department_id,signature_path,stamp_path,titer_path',
+            'assignedExpert:id,name,email,department_id,signature_path,stamp_path,titer_path',
             'currentHandler.roles:id,name',
             'paymentCategory:id,name',
             'paymentType:id,category_id,name',
@@ -89,6 +96,7 @@ class PaymentService
     public function planningBudgetExperts()
     {
         $allowedRoles = [
+            'expert',
             'planning-budget-experts',
             'planning-budget-expert',
             'planning-and-budget-expert',
@@ -123,6 +131,37 @@ class PaymentService
             ->values();
     }
 
+    public function departmentUsersByRole(int|string $departmentId, array $normalizedRoles)
+    {
+        return User::query()
+            ->with(['roles:id,name', 'department:id,name,office_id'])
+            ->where('is_active', true)
+            ->where('department_id', $departmentId)
+            ->whereHas('roles')
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'phone', 'is_active', 'department_id'])
+            ->filter(function (User $user) use ($normalizedRoles) {
+                return $user->roles->contains(function ($role) use ($normalizedRoles) {
+                    return in_array($this->normalizeRole((string) $role->name), $normalizedRoles, true);
+                });
+            })
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'status' => 'active',
+                'department_id' => $user->department_id,
+                'department' => $user->department,
+                'display_role' => $user->roles->pluck('name')->first(),
+                'roles' => $user->roles->map(fn ($role) => [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                ])->values(),
+            ])
+            ->values();
+    }
+
     public function create(array $data, ?array $files = []): PaymentRequest
     {
         return DB::transaction(function () use ($data, $files) {
@@ -147,9 +186,19 @@ class PaymentService
             $data['request_type'] = $data['request_type'] ?? 'Payment Request';
             $data['payment_category'] = $data['payment_category'] ?? 'General Payment';
             $data['title'] = $data['title'] ?? ($data['requesting_entity'] ?? 'Payment Request');
+
+            // Keep compatibility with the older payment_requests schema.
+            // Some installed databases still have request_no and payee_name as NOT NULL columns.
+            // The frontend uses payment_no/requesting_entity, so we mirror safe values here without
+            // changing the API contract or workflow state.
             $number = $this->nextNumber('PAY');
             $data['payment_no'] = $data['payment_no'] ?? $number;
             $data['request_no'] = $data['request_no'] ?? $data['payment_no'];
+            $data['payee_name'] = $data['payee_name']
+                ?? $data['requesting_entity']
+                ?? $data['title']
+                ?? 'Payment Request';
+
             $data['requested_by'] = auth()->id();
             $data['status'] = PaymentRequest::STATUS_DRAFT;
 
@@ -230,6 +279,43 @@ class PaymentService
                 ]);
             }
 
+            if ($action === 'save_manager_final_attachment_draft') {
+                if ($from !== PaymentRequest::STATUS_MANAGER_FINAL_REVIEW) {
+                    throw ValidationException::withMessages([
+                        'action' => ['Attachment draft can only be saved during final manager approval.'],
+                    ]);
+                }
+
+                $payload = $this->officialAttachmentPayload($data, false);
+                $payload['attachment_drafted_by'] = auth()->id();
+                $payload['attachment_drafted_at'] = now();
+
+                $request->update($this->filterPaymentRequestColumns($payload));
+                $this->history($request, 'SAVE_MANAGER_FINAL_ATTACHMENT_DRAFT', $from, $from, 'Payment official attachment draft saved', $payload);
+
+                return $this->find($request->id);
+            }
+
+            if ($action === 'save_record_attachment_draft') {
+                if ($from !== PaymentRequest::STATUS_RECORDS_PROCESSING) {
+                    throw ValidationException::withMessages([
+                        'action' => ['Record attachment draft can only be saved during records processing.'],
+                    ]);
+                }
+
+                $payload = [
+                    'attachment_reference_no' => $data['attachment_reference_no'] ?? $request->attachment_reference_no,
+                    'attachment_official_date' => $data['attachment_official_date'] ?? $request->attachment_official_date ?? now()->toDateString(),
+                    'records_attachment_drafted_by' => auth()->id(),
+                    'records_attachment_drafted_at' => now(),
+                ];
+
+                $request->update($this->filterPaymentRequestColumns($payload));
+                $this->history($request, 'SAVE_RECORD_ATTACHMENT_DRAFT', $from, $from, 'Record attachment draft saved', $payload);
+
+                return $this->find($request->id);
+            }
+
             if ($action === 'reject') {
                 $returnStep = $this->previousStepForRejection($request, $from);
 
@@ -274,31 +360,69 @@ class PaymentService
                     ]);
                 }
 
+                $this->ensureInitialPaymentApprover((int) $handlerId);
+
                 $payload['submitted_at'] = now();
                 $payload['current_handler_id'] = $handlerId;
             }
 
             if ($action === 'manager_approve') {
-                $payload['current_handler_id'] = null;
+                $departmentId = $data['department_id'] ?? null;
+                $teamLeaderId = $data['team_leader_user_id'] ?? null;
+
+                if (! $departmentId || ! $teamLeaderId) {
+                    throw ValidationException::withMessages([
+                        'department_id' => ['Please select department and department Team Leader before forwarding.'],
+                    ]);
+                }
+
+                Department::query()->where('is_active', true)->findOrFail($departmentId);
+                $this->ensureUserInDepartmentWithRole((int) $teamLeaderId, (int) $departmentId, ['team-leader', 'department-head', 'team-leader-department-head'], 'team_leader_user_id', 'Please select a Team Leader from the selected department.');
+
+                $payload['department_id'] = $departmentId;
+                $payload['assigned_team_leader_id'] = $teamLeaderId;
+                $payload['current_handler_id'] = $teamLeaderId;
             }
 
             if ($action === 'budget_tl_approve') {
                 $expertId = $data['expert_user_id'] ?? null;
+                $departmentId = $request->department_id;
 
-                if (! $expertId) {
+                if (! $expertId || ! $departmentId) {
                     throw ValidationException::withMessages([
-                        'expert_user_id' => ['Please select a Planning & Budget Expert.'],
+                        'expert_user_id' => ['Please select an Expert from the assigned department.'],
                     ]);
                 }
 
+                if ((int) $request->assigned_team_leader_id !== (int) auth()->id() && ! $this->canViewAllPayments()) {
+                    throw ValidationException::withMessages([
+                        'action' => ['This payment request is assigned to another Team Leader.'],
+                    ]);
+                }
+
+                $this->ensureUserInDepartmentWithRole((int) $expertId, (int) $departmentId, ['expert'], 'expert_user_id', 'Please select an Expert from the same department.');
+
+                $payload['assigned_expert_id'] = $expertId;
                 $payload['current_handler_id'] = $expertId;
             }
 
             if ($action === 'expert_complete') {
-                $payload['current_handler_id'] = $request->budget_tl_signed_by;
+                if ((int) $request->assigned_expert_id !== (int) auth()->id() && ! $this->canViewAllPayments()) {
+                    throw ValidationException::withMessages([
+                        'action' => ['This payment request is assigned to another Expert.'],
+                    ]);
+                }
+
+                $payload['current_handler_id'] = $request->assigned_team_leader_id ?: $request->budget_tl_signed_by;
             }
 
             if ($action === 'budget_tl_final_approve') {
+                if ((int) $request->assigned_team_leader_id !== (int) auth()->id() && ! $this->canViewAllPayments()) {
+                    throw ValidationException::withMessages([
+                        'action' => ['This payment request is assigned to another Team Leader.'],
+                    ]);
+                }
+
                 $payload['current_handler_id'] = $request->manager_signed_by;
             }
 
@@ -343,9 +467,21 @@ class PaymentService
                 $payload['budget_year'] = $data['budget_year'] ?? $request->budget_year;
             }
 
+            if ($action === 'manager_final_approve' && ! $this->isPerDiemPayment($request)) {
+                $attachmentPayload = $this->officialAttachmentPayload($data, false, $request);
+                $payload = array_merge($payload, $attachmentPayload, [
+                    'attachment_drafted_by' => $request->attachment_drafted_by ?: auth()->id(),
+                    'attachment_drafted_at' => $request->attachment_drafted_at ?: now(),
+                ]);
+            }
+
             if ($action === 'records_process') {
                 $payload['reference_no'] = $data['reference_no'] ?? $request->reference_no ?? $this->nextNumber('PAY-REF');
                 $payload['official_date'] = $data['official_date'] ?? now()->toDateString();
+                $payload['attachment_reference_no'] = $data['attachment_reference_no'] ?? $request->attachment_reference_no ?? $this->nextNumber('ATT-REF');
+                $payload['attachment_official_date'] = $data['attachment_official_date'] ?? $request->attachment_official_date ?? now()->toDateString();
+                $payload['records_attachment_drafted_by'] = $request->records_attachment_drafted_by ?: auth()->id();
+                $payload['records_attachment_drafted_at'] = $request->records_attachment_drafted_at ?: now();
             }
 
             if ($action === 'finance_complete') {
@@ -360,16 +496,11 @@ class PaymentService
                 $payload['completed_at'] = now();
             }
 
-            $request->update($payload);
+            $request->update($this->filterPaymentRequestColumns($payload));
 
-            if ($action === 'records_process') {
+            if (in_array($action, ['records_process', 'finance_complete'], true)) {
                 $this->deductBudgetForPayment($request->fresh());
             }
-
-            if ($action === 'finance_complete') {
-                $this->deductBudgetForPayment($request->fresh());
-            }
-
             $this->history($request, strtoupper($action), $from, $to, $data['note'] ?? $data['reason'] ?? null, $data);
 
             if (class_exists(AuditLogService::class)) {
@@ -382,6 +513,18 @@ class PaymentService
 
             return $this->find($request->id);
         });
+    }
+
+
+    protected function filterPaymentRequestColumns(array $payload): array
+    {
+        if (empty($payload)) {
+            return $payload;
+        }
+
+        return collect($payload)
+            ->filter(fn ($value, string $key) => Schema::hasColumn('payment_requests', $key))
+            ->all();
     }
 
     protected function canRunActionFromStatus(string $from, string $action): bool
@@ -400,7 +543,9 @@ class PaymentService
             'budget_tl_approve' => $from === PaymentRequest::STATUS_BUDGET_TL_REVIEW,
             'expert_complete' => $from === PaymentRequest::STATUS_BUDGET_EXPERT_PROCESSING,
             'budget_tl_final_approve' => $from === PaymentRequest::STATUS_BUDGET_TL_FINAL_REVIEW,
+            'save_manager_final_attachment_draft' => $from === PaymentRequest::STATUS_MANAGER_FINAL_REVIEW,
             'manager_final_approve' => $from === PaymentRequest::STATUS_MANAGER_FINAL_REVIEW,
+            'save_record_attachment_draft' => $from === PaymentRequest::STATUS_RECORDS_PROCESSING,
             'records_process' => $from === PaymentRequest::STATUS_RECORDS_PROCESSING,
             'finance_complete' => $from === PaymentRequest::STATUS_SENT_TO_FINANCE,
             default => false,
@@ -486,6 +631,61 @@ class PaymentService
         return $actorId ? (int) $actorId : null;
     }
 
+
+    protected function ensureUserInDepartmentWithRole(int $userId, int $departmentId, array $normalizedRoles, string $field, string $message): User
+    {
+        $user = User::query()->with('roles:id,name')->findOrFail($userId);
+
+        $hasRole = $user->roles->contains(fn ($role) => in_array($this->normalizeRole((string) $role->name), $normalizedRoles, true));
+
+        if ((int) $user->department_id !== (int) $departmentId || ! $hasRole || ! $user->is_active) {
+            throw ValidationException::withMessages([
+                $field => [$message],
+            ]);
+        }
+
+        return $user;
+    }
+
+    protected function officialAttachmentPayload(array $data, bool $require, ?PaymentRequest $request = null): array
+    {
+        $payload = [
+            'attachment_to' => $data['attachment_to'] ?? $request?->attachment_to,
+            'attachment_address' => $data['attachment_address'] ?? $request?->attachment_address,
+            'attachment_case' => $data['attachment_case'] ?? $request?->attachment_case,
+            'attachment_body' => $data['attachment_body'] ?? $request?->attachment_body,
+            'attachment_gg' => array_values(array_filter($data['attachment_gg'] ?? $request?->attachment_gg ?? [])),
+        ];
+
+        if ($require) {
+            $missing = [];
+            foreach ([
+                'attachment_to' => 'To',
+                'attachment_address' => 'Address',
+                'attachment_case' => 'Case',
+                'attachment_body' => 'Body',
+            ] as $field => $label) {
+                if (blank($payload[$field] ?? null)) {
+                    $missing[$field] = ["Please fill {$label} before final approval."];
+                }
+            }
+
+            if (! empty($missing)) {
+                throw ValidationException::withMessages($missing);
+            }
+        }
+
+        return $payload;
+    }
+
+    protected function isPerDiemPayment(PaymentRequest $request): bool
+    {
+        $value = strtolower(trim((string) ($request->request_type ?? '')) . ' ' . trim((string) ($request->paymentType?->name ?? '')));
+
+        return str_contains($value, 'per diem')
+            || str_contains($value, 'per-diem')
+            || str_contains($value, 'durgoo');
+    }
 
     protected function deductBudgetForPayment(PaymentRequest $request): void
     {
@@ -648,6 +848,42 @@ class PaymentService
         return $grandTotal;
     }
 
+
+    protected function ensureInitialPaymentApprover(int $userId): void
+    {
+        $approver = User::query()
+            ->with(['roles:id,name'])
+            ->where('is_active', true)
+            ->find($userId);
+
+        if (! $approver) {
+            throw ValidationException::withMessages([
+                'send_to_user_id' => ['Please select an active Manager, Head of Development Branch, or Head of Service Branch.'],
+            ]);
+        }
+
+        $allowedRoles = [
+            'manager',
+            'municipal-manager',
+            'head-of-development-branch',
+            'head-development-branch',
+            'development-branch-head',
+            'head-of-service-branch',
+            'head-service-branch',
+            'service-branch-head',
+        ];
+
+        $hasAllowedRole = $approver->roles->contains(function ($role) use ($allowedRoles) {
+            return in_array($this->normalizeRole((string) $role->name), $allowedRoles, true);
+        });
+
+        if (! $hasAllowedRole) {
+            throw ValidationException::withMessages([
+                'send_to_user_id' => ['Payment request can be submitted only to Manager, Head of Development Branch, or Head of Service Branch.'],
+            ]);
+        }
+    }
+
     protected function visibleWorkflowStatusesForUser(): array
     {
         $user = auth()->user();
@@ -662,21 +898,11 @@ class PaymentService
 
         $statuses = [];
 
-        if (array_intersect($roles, ['manager', 'municipal-manager', 'head-of-development-branch', 'development-branch-head', 'head-development-branch', 'head-of-service-branch', 'service-branch-head', 'head-service-branch'])) {
-            $statuses[] = PaymentRequest::STATUS_MANAGER_REVIEW;
-            $statuses[] = PaymentRequest::STATUS_MANAGER_FINAL_REVIEW;
-        }
+        // Manager/Heads, Department Team Leaders, and Experts are assignment-based only:
+        // current_handler_id / assigned_team_leader_id / assigned_expert_id.
+        // Do not expose all requests in those workflow statuses.
 
-        if (array_intersect($roles, ['planning-budget-team-leader', 'planning-and-budget-team-leader', 'budget-team-leader', 'planning-budget-tl'])) {
-            $statuses[] = PaymentRequest::STATUS_BUDGET_TL_REVIEW;
-            $statuses[] = PaymentRequest::STATUS_BUDGET_TL_FINAL_REVIEW;
-        }
-
-        if (array_intersect($roles, ['planning-budget-expert', 'planning-and-budget-expert', 'planning-budget-experts', 'budget-expert'])) {
-            $statuses[] = PaymentRequest::STATUS_BUDGET_EXPERT_PROCESSING;
-        }
-
-        if (array_intersect($roles, ['records-office', 'record-office', 'record-officer', 'records-officer', 'secretary'])) {
+        if (array_intersect($roles, ['records-office', 'record-office', 'record-officer', 'records-officer', 'secretary', 'secretory'])) {
             $statuses[] = PaymentRequest::STATUS_RECORDS_PROCESSING;
         }
 

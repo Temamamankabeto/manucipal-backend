@@ -11,28 +11,28 @@ class UserPolicy
 
     public function viewAny(User $user): bool
     {
-        return $this->allows($user, 'users.view', 'users.read');
+        return $user->isSuperAdmin() || $this->allows($user, 'users.view', 'users.read');
     }
 
     public function view(User $user, User $model): bool
     {
-        return $this->allows($user, 'users.view', 'users.read') && $user->canManageScopeOf($model);
+        return $user->isSuperAdmin() || ($this->allows($user, 'users.view', 'users.read') && $user->canManageScopeOf($model));
     }
 
     public function create(User $user): bool
     {
-        return $this->allows($user, 'users.create');
+        return $user->isSuperAdmin() || $this->allows($user, 'users.create');
     }
 
     public function update(User $user, User $model): bool
     {
-        return $this->allows($user, 'users.update') && $user->canManageScopeOf($model);
+        return $user->isSuperAdmin() || ($this->allows($user, 'users.update') && $user->canManageScopeOf($model));
     }
 
     public function delete(User $user, User $model): bool
     {
         return $user->id !== $model->id
-            && $this->allows($user, 'users.delete')
+            && ($user->isSuperAdmin() || $this->allows($user, 'users.delete'))
             && $user->canManageScopeOf($model);
     }
 
@@ -56,12 +56,12 @@ class UserPolicy
 
     public function rolesLite(User $user): bool
     {
-        return $this->allows($user, 'roles.view', 'roles.read', 'users.create', 'users.update');
+        return $user->isSuperAdmin() || $this->allows($user, 'roles.view', 'roles.read', 'users.create', 'users.update');
     }
 
     public function officesLite(User $user): bool
     {
-        return $this->allows($user, 'offices.view', 'users.create', 'users.update', 'users.view', 'users.read');
+        return $user->isSuperAdmin() || $this->allows($user, 'offices.view', 'users.create', 'users.update', 'users.view', 'users.read');
     }
 
 }

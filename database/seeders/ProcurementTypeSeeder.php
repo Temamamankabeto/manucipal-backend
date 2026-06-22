@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\ProcurementCategory;
 use App\Models\ProcurementType;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class ProcurementTypeSeeder extends Seeder
 {
@@ -12,60 +13,46 @@ class ProcurementTypeSeeder extends Seeder
     {
         $types = [
             'Fixed Asset' => [
+                'Furniture',
                 'Computer',
                 'Laptop',
                 'Printer',
-                'Scanner',
                 'Photocopier',
-                'Furniture',
                 'Office Equipment',
-                'ICT Equipment',
                 'Network Equipment',
-                'Air Conditioner',
-                'CCTV System',
-            ],
-            'Machinery' => [
                 'Vehicle',
                 'Generator',
-                'Tractor',
-                'Agricultural Machinery',
-                'Construction Machinery',
-                'Heavy Equipment',
-                'Water Pump',
-                'Laboratory Equipment',
+                'Building Asset',
             ],
-            'Operational' => [
-                'Stationery',
-                'Fuel',
-                'Cleaning Materials',
-                'Printing Service',
-                'Maintenance Service',
-                'Consultancy Service',
-                'Training Service',
-                'Transport Service',
-                'Utility Service',
+            'Machinery' => [
+                'Excavator',
+                'Bulldozer',
+                'Loader',
+                'Grader',
+                'Road Roller',
+                'Backhoe Loader',
+                'Concrete Mixer',
+                'Water Pump',
+                'Agricultural Machinery',
+                'Industrial Machinery',
             ],
         ];
 
-        foreach ($types as $categoryName => $items) {
-            $category = ProcurementCategory::where('name', $categoryName)->first();
+        DB::transaction(function () use ($types): void {
+            foreach ($types as $categoryName => $items) {
+                $category = ProcurementCategory::query()->where('name', $categoryName)->first();
 
-            if (! $category) {
-                continue;
-            }
+                if (! $category) {
+                    continue;
+                }
 
-            foreach ($items as $name) {
-                ProcurementType::updateOrCreate(
-                    [
-                        'category_id' => $category->id,
-                        'name' => $name,
-                    ],
-                    [
-                        'category_id' => $category->id,
-                        'name' => $name,
-                    ]
-                );
+                foreach ($items as $name) {
+                    ProcurementType::query()->updateOrCreate(
+                        ['category_id' => $category->id, 'name' => $name],
+                        ['category_id' => $category->id, 'name' => $name]
+                    );
+                }
             }
-        }
+        });
     }
 }

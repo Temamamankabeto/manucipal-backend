@@ -9,12 +9,17 @@ use App\Http\Controllers\Api\Payment\PaymentTypeController;
 use App\Http\Controllers\Api\Reports\ProcurementPaymentReportController;
 use App\Http\Controllers\Api\Budget\BudgetController;
 use App\Http\Controllers\Api\Budget\BudgetTransactionController;
+use App\Http\Controllers\Api\Dashboard\RoleDashboardController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
+    Route::get('/dashboard/role-summary', [RoleDashboardController::class, 'roleSummary']);
     Route::get('/procurement-payment-reports/summary', [ProcurementPaymentReportController::class, 'summary']);
     Route::get('/procurement-requests', [ProcurementRequestController::class, 'index']);
     Route::get('/procurement-requests-initial-approvers', [ProcurementRequestController::class, 'initialApprovers']);
+    Route::get('/procurement-departments', [ProcurementRequestController::class, 'departments']);
+    Route::get('/procurement-budget-departments', [ProcurementRequestController::class, 'budgetDepartments']);
+    Route::get('/procurement-departments/{department}/team-leaders', [ProcurementRequestController::class, 'departmentTeamLeaders']);
     Route::post('/procurement-requests', [ProcurementRequestController::class, 'store']);
     Route::get('/procurement-requests/{id}', [ProcurementRequestController::class, 'show']);
     Route::post('/procurement-requests/{id}', [ProcurementRequestController::class, 'update']);
@@ -40,6 +45,9 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/payment-requests', [PaymentRequestController::class, 'index']);
     Route::get('/payment-requests-initial-approvers', [PaymentRequestController::class, 'initialApprovers']);
     Route::get('/payment-requests-planning-budget-experts', [PaymentRequestController::class, 'planningBudgetExperts']);
+    Route::get('/payment-departments', [PaymentRequestController::class, 'departments']);
+    Route::get('/payment-departments/{department}/team-leaders', [PaymentRequestController::class, 'departmentTeamLeaders']);
+    Route::get('/payment-departments/{department}/experts', [PaymentRequestController::class, 'departmentExperts']);
     Route::post('/payment-requests', [PaymentRequestController::class, 'store']);
     Route::get('/payment-requests/{id}', [PaymentRequestController::class, 'show']);
     Route::post('/payment-requests/{id}', [PaymentRequestController::class, 'update']);

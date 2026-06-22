@@ -27,12 +27,18 @@ class UpdateUserRequest extends FormRequest
             'nullable',
             'string',
             Rule::in(['III', 'IV']),
-            Rule::requiredIf(fn () => trim((string) $this->input('role')) === User::ROLE_PLANNING_BUDGET_EXPERT),
+            
         ],
 
         'admin_level' => ['nullable', Rule::in([User::LEVEL_CITY, User::LEVEL_SUBCITY, User::LEVEL_WOREDA, User::LEVEL_ZONE])],
             'office_id' => ['nullable', 'integer', Rule::exists('offices', 'id')],
-            'sub_city_id' => ['nullable', 'integer', Rule::exists('offices', 'id')],
+            'department_id' => [
+            'nullable',
+            'integer',
+            Rule::exists('departments', 'id')->where(fn ($q) => $q->where('office_id', $this->input('office_id'))),
+        ],
+
+        'sub_city_id' => ['nullable', 'integer', Rule::exists('offices', 'id')],
             'woreda_id' => ['nullable', 'integer', Rule::exists('offices', 'id')],
             'zone_id' => ['nullable', 'integer', Rule::exists('offices', 'id')],
         'signature' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
@@ -45,7 +51,7 @@ class UpdateUserRequest extends FormRequest
                 'required',
                 'string',
                 'max:100',
-                Rule::exists('roles', 'name')->where(fn ($q) => $q->where('guard_name', 'sanctum')),
+                Rule::in(User::userManagementRoleNames()),
             ],
         ];
     }
